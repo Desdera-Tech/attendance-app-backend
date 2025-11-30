@@ -1,0 +1,169 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String  @id @default(uuid())
+  clerkUserId  String  @unique
+  email        String  @unique
+  name         String
+  role         Role
+  passwordHash String
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  students  Student[]
+  lecturers Lecturer[]
+
+  @@index([role])
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  LECTURER
+  COURSE_REP
+  STUDENT
+}
+
+model Student {
+  id           String     @id
+  user         User       @relation(fields: [id], references: [id], onDelete: Cascade)
+  matricNumber String     @unique
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  phone        String
+  profilePhoto String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendanceRecords AttendanceRecord[]
+
+  @@index([departmentId])
+  @@index([matricNumber])
+  @@map("students")
+}
+
+model Lecturer {
+  id           String  @id
+  user         User    @relation(fields: [id], references: [id], onDelete: Cascade)
+  phone        String
+  profilePhoto String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendanceSessions AttendanceSession[]
+
+  @@map("lecturers")
+}
+
+model Course {
+  id           String     @id @default(uuid())
+  code         String
+  title        String
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendanceSessions AttendanceSession[]
+
+  @@unique([code, departmentId])
+  @@index([departmentId])
+  @@map("courses")
+}
+
+model Department {
+  id        String  @id @default(uuid())
+  collegeId String
+  name      String  @unique
+  college   College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courses  Course[]
+  students Student[]
+
+  @@index([collegeId])
+  @@map("departments")
+}
+
+model College {
+  id   String @id @default(uuid())
+  name String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  departments Department[]
+
+  @@map("colleges")
+}
+
+model AttendanceSession {
+  id         String    @id @default(uuid())
+  courseId   String
+  course     Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lecturerId String?
+  lecturer   Lecturer? @relation(fields: [lecturerId], references: [id], onDelete: SetNull)
+  startsAt   DateTime
+  endsAt     DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  attendanceRecords  AttendanceRecord[]
+  attendanceQrTokens AttendanceQrToken[]
+
+  @@index([courseId])
+  @@index([lecturerId])
+  @@map("attendance_sessions")
+}
+
+model AttendanceQrToken {
+  id        String            @id @default(uuid())
+  sessionId String
+  session   AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  nonce     String   @unique
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([expiresAt])
+  @@map("attendance_qr_tokens")
+}
+
+model AttendanceRecord {
+  id        String            @id @default(uuid())
+  sessionId String
+  session   AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sessionId, studentId])
+  @@index([sessionId])
+  @@index([studentId])
+  @@map("attendance_records")
+}
