@@ -1,39 +1,28 @@
 import "dotenv/config";
 import express from "express";
 import http from "http";
-import bodyParser from "body-parser";
 import compression from "compression";
 import cors from "cors";
-import { ENV } from "config/env";
-import {
-  clerkClient,
-  clerkMiddleware,
-  getAuth,
-  requireAuth,
-} from "@clerk/express";
+import { ENV } from "./config/env.ts";
+import { clerkMiddleware } from "@clerk/express";
+import routes from "./routes/index.ts";
+import { swaggerDocs } from "./swagger/swagger.ts";
 
 const app = express();
 
-app.use(clerkMiddleware());
-
 app.use(cors());
 
+app.use(clerkMiddleware());
+
 app.use(compression());
-app.use(bodyParser.json());
+app.use(express.json());
 
-// Use requireAuth() to protect this route
-// If user isn't authenticated, requireAuth() will redirect back to the homepage
-app.get("/protected", requireAuth(), async (req, res) => {
-  // Use `getAuth()` to get the user's `userId`
-  const { userId } = getAuth(req);
+app.use("/api", routes);
 
-  // Use Clerk's JavaScript Backend SDK to get the user's User object
-  const user = await clerkClient.users.getUser(userId);
-
-  return res.json({ user });
-});
+swaggerDocs(app);
 
 const server = http.createServer(app);
+
 server.listen(ENV.PORT, () => {
   console.log(`Server is running on http://localhost:${ENV.PORT}`);
 });

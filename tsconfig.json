@@ -1,12 +1,14 @@
 {
   "compilerOptions": {
-    "module": "esnext",
-    "moduleResolution": "node",
-    "baseUrl": "src",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "noEmit": true,
     "outDir": "dist",
+    "strict": true,
     "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
     "sourceMap": true,
     "noImplicitAny": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "src/swagger"]
 }

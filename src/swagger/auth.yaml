@@ -1,0 +1,160 @@
+openapi: 3.0.0
+info:
+  title: Attendance App – Auth API
+  version: 1.0.0
+
+tags:
+  - name: Auth
+    description: Authentication and user management endpoints
+
+paths:
+  /api/auth/admin:
+    post:
+      tags:
+        - Auth
+      summary: Create a new admin user
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminRequest"
+      responses:
+        "201":
+          description: Admin created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+        "409":
+          description: Admin already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthErrorResponse"
+
+  /api/auth/student:
+    post:
+      tags:
+        - Auth
+      summary: Create a new student user
+      security:
+        - clerkAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStudentRequest"
+      responses:
+        "201":
+          description: Student created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSuccessResponse"
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+        "409":
+          description: Student already exists
+
+components:
+  securitySchemes:
+    clerkAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreateAdminRequest:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - phone
+        - password
+      properties:
+        firstName:
+          type: string
+          minLength: 3
+        lastName:
+          type: string
+          minLength: 3
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        password:
+          type: string
+          minLength: 6
+
+    CreateStudentRequest:
+      type: object
+      required:
+        - matricNumber
+        - firstName
+        - lastName
+        - email
+        - phone
+        - departmentId
+        - password
+      properties:
+        matricNumber:
+          type: string
+          pattern: "^[0-9]{12}$"
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        departmentId:
+          type: string
+        password:
+          type: string
+          minLength: 6
+
+    AuthSuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        data:
+          type: object
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          type: array
+          items:
+            type: string
+
+    AuthErrorResponse:
+      type: object
+      properties:
+        message:
+          type: string
