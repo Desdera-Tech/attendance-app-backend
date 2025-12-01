@@ -1,5 +1,5 @@
 export interface LoginResponse<T> {
-  data: T;
+  data?: T;
   accessToken: string;
   refreshToken: string;
 }

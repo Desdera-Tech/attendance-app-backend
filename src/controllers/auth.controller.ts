@@ -7,6 +7,8 @@ import { User } from "../entities/User.ts";
 import { loginAdminRequest } from "../dto/auth/request/LoginAdminRequest.ts";
 import { loginLecturerRequest } from "../dto/auth/request/LoginLecturerRequest.ts";
 import { loginStudentRequest } from "../dto/auth/request/LoginStudentRequest.ts";
+import { ApiResponse } from "../dto/ApiRespnse.ts";
+import { jwtService } from "../services/jwt.service.ts";
 
 export class AuthController {
   async createAdmin(req: Request, res: Response) {
@@ -112,8 +114,20 @@ export class AuthController {
   }
 
   async refresh(req: Request, res: Response) {
-    try {
-    } catch (error) {}
+    const refreshToken = req.headers["x-refresh-token"] as string | undefined;
+
+    if (!refreshToken) {
+      const response: ApiResponse<null> = {
+        data: null,
+        success: false,
+        statusCode: 401,
+        message: "Missing refresh token",
+      };
+      return res.status(response.statusCode).json(response);
+    }
+
+    const response = await authService.refresh(refreshToken);
+    res.status(response.statusCode).json(response);
   }
 }
 

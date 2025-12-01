@@ -22,7 +22,7 @@ const withPermissions =
           : [requiredRole];
 
         if (!user || !roles.includes(user.role)) {
-          const response: ApiResponse<string> = {
+          const response: ApiResponse<null> = {
             data: null,
             success: false,
             statusCode: 403,
@@ -35,7 +35,7 @@ const withPermissions =
         return handler(req, res, user);
       } catch (err) {
         console.error(err);
-        const response: ApiResponse<string> = {
+        const response: ApiResponse<null> = {
           data: null,
           success: false,
           statusCode: 500,

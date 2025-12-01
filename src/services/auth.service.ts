@@ -13,7 +13,8 @@ import { User } from "../entities/User.ts";
 import { Role } from "../generated/prisma/enums.ts";
 import { prisma } from "../lib/prisma.ts";
 import { passwordCompare, passwordHash } from "../utils/password.ts";
-import { jwtService } from "./jwt.service.ts";
+import { jwtService, TokenPayload } from "./jwt.service.ts";
+import jwt from "jsonwebtoken";
 
 export class AuthService {
   async createAdmin(data: CreateAdminRequest): Promise<ApiResponse<Admin>> {
@@ -369,12 +370,82 @@ export class AuthService {
     return response;
   }
 
-  async refresh(oldRefreshToken: string) {
-    const { userId, role } = jwtService.verifyRefreshToken(oldRefreshToken);
-    return this.generateTokens(userId, role);
+  async refresh(
+    oldRefreshToken: string
+  ): Promise<ApiResponse<LoginResponse<null>>> {
+    // Check blacklist
+    const blacklisted = await jwtService.isRefreshTokenBlacklisted(
+      oldRefreshToken
+    );
+
+    if (blacklisted) {
+      const response: ApiResponse<LoginResponse<null>> = {
+        name: "REFRESH_TOKEN_BLACKLISTED",
+        success: false,
+        statusCode: 403,
+        message: "Refresh token is blacklisted",
+      };
+      return response;
+    }
+
+    let payload: TokenPayload | null = null;
+
+    try {
+      // Verify token
+      payload = jwtService.verifyRefreshToken(oldRefreshToken);
+
+      // BLACKLIST OLD TOKEN
+      await jwtService.blacklistRefreshToken(oldRefreshToken, 60 * 60 * 24 * 7); // 7 days
+    } catch (error) {
+      console.error(error);
+
+      if (error instanceof jwt.JsonWebTokenError) {
+        if (error.name === "TokenExpiredError") {
+          const response: ApiResponse<LoginResponse<null>> = {
+            name: "EXPIRED_TOKEN",
+            success: false,
+            statusCode: 401,
+            message: "Token expired",
+          };
+          return response;
+        } else {
+          const response: ApiResponse<LoginResponse<null>> = {
+            name: "INVALID_TOKEN",
+            success: false,
+            statusCode: 401,
+            message: "Invalid token",
+          };
+          return response;
+        }
+      }
+    }
+
+    if (!payload) {
+      const response: ApiResponse<LoginResponse<null>> = {
+        success: false,
+        statusCode: 500,
+        message: "An error occurred while refreshing token",
+      };
+      return response;
+    }
+
+    // Generate new tokens
+    const accessToken = jwtService.generateAccessToken(payload);
+    const refreshToken = jwtService.generateRefreshToken(payload);
+
+    const response: ApiResponse<LoginResponse<null>> = {
+      data: {
+        accessToken,
+        refreshToken,
+      } as LoginResponse<null>,
+      success: false,
+      statusCode: 200,
+      message: "Tokens refreshed successfully",
+    };
+    return response;
   }
 
-  private generateTokens(userId: string, role: Role) {
+  generateTokens(userId: string, role: Role) {
     const accessToken = jwtService.generateAccessToken({
       userId,
       role,

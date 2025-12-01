@@ -1,8 +1,9 @@
 import jwt, { SignOptions } from "jsonwebtoken";
 import { ENV } from "../config/env.ts";
 import { Role } from "../generated/prisma/enums.ts";
+import { redis } from "../config/redis.ts";
 
-interface TokenPayload {
+export interface TokenPayload {
   userId: string;
   type: "access" | "refresh";
   role: Role;
@@ -36,6 +37,15 @@ export class JwtService {
 
   verifyRefreshToken(token: string): TokenPayload {
     return jwt.verify(token, this.jwtSecret) as TokenPayload;
+  }
+
+  async blacklistRefreshToken(token: string, expiresInSeconds: number) {
+    await redis.set(`bl_refresh:${token}`, "1", "EX", expiresInSeconds);
+  }
+
+  async isRefreshTokenBlacklisted(token: string) {
+    const exists = await redis.get(`bl_refresh:${token}`);
+    return exists !== null;
   }
 }
 

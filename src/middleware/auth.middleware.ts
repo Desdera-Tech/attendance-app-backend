@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { ApiResponse } from "../dto/ApiRespnse.ts";
 import { jwtService } from "../services/jwt.service.ts";
+import jwt from "jsonwebtoken";
 
 const authMiddleware = async (
   req: Request,
@@ -21,13 +22,26 @@ const authMiddleware = async (
       req.auth = { userId: payload.userId, role: payload.role };
     } catch (error) {
       console.error(error);
-      const response: ApiResponse<string> = {
-        data: null,
-        success: false,
-        statusCode: 500,
-        message: error as string,
-      };
-      return res.status(response.statusCode).json(response);
+
+      if (error instanceof jwt.JsonWebTokenError) {
+        if (error.name === "TokenExpiredError") {
+          const response: ApiResponse<null> = {
+            name: "EXPIRED_TOKEN",
+            success: false,
+            statusCode: 401,
+            message: "Token expired",
+          };
+          return res.status(response.statusCode).json(response);
+        } else {
+          const response: ApiResponse<null> = {
+            name: "INVALID_TOKEN",
+            success: false,
+            statusCode: 401,
+            message: "Invalid token",
+          };
+          return res.status(response.statusCode).json(response);
+        }
+      }
     }
   }
 
@@ -41,8 +55,8 @@ export const requireAuth = async (
 ) => {
   authMiddleware(req, res, async () => {
     if (!req.auth) {
-      const response: ApiResponse<string> = {
-        data: null,
+      const response: ApiResponse<null> = {
+        name: "UNAUTHORIZED",
         success: false,
         statusCode: 401,
         message: "Unauthorized",
