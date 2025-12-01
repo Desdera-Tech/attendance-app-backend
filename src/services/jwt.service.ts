@@ -39,6 +39,19 @@ export class JwtService {
     return jwt.verify(token, this.jwtSecret) as TokenPayload;
   }
 
+  async storeRefreshToken(
+    identifier: string,
+    token: string,
+    expiresInSeconds: number
+  ) {
+    await redis.set(
+      `active_refresh:${identifier}:${token}`,
+      "1",
+      "EX",
+      expiresInSeconds
+    );
+  }
+
   async blacklistRefreshToken(token: string, expiresInSeconds: number) {
     await redis.set(`bl_refresh:${token}`, "1", "EX", expiresInSeconds);
   }

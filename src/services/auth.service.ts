@@ -455,6 +455,8 @@ export class AuthService {
       role,
     });
 
+    jwtService.storeRefreshToken(userId, refreshToken, 60 * 60 * 24 * 7);
+
     return { accessToken, refreshToken };
   }
 }
