@@ -1,11 +1,10 @@
 import { Role } from "../generated/prisma/enums.ts";
 
-export interface User {
+export interface Admin {
   id: string;
-  firstName: string;
-  lastName: string;
+  name: string;
   email: string;
-  role: Role;
   profilePhoto: string | null;
+  role: Role;
   createdAt: Date;
 }

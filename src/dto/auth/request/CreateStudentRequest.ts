@@ -9,6 +9,10 @@ export const createStudentRequest = z.object({
     3,
     "First name must be at least 3 characters long"
   ),
+  middleName: requiredString.min(
+    3,
+    "Middle name must be at least 3 characters long"
+  ),
   lastName: requiredString.min(
     3,
     "Last name must be at least 3 characters long"

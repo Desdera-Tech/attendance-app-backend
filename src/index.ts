@@ -4,18 +4,18 @@ import http from "http";
 import compression from "compression";
 import cors from "cors";
 import { ENV } from "./config/env.ts";
-import { clerkMiddleware } from "@clerk/express";
 import routes from "./routes/index.ts";
 import { swaggerDocs } from "./swagger/swagger.ts";
+import authMiddleware from "./middleware/auth.middleware.ts";
 
 const app = express();
 
-app.use(cors());
-
-app.use(clerkMiddleware());
-
 app.use(compression());
+
+app.use(cors());
 app.use(express.json());
+
+app.use(authMiddleware);
 
 app.use("/api", routes);
 

@@ -1,14 +1,16 @@
 {
   "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "ESNext", // or ESNext depending on your runtime
+    "target": "ES2021", // or whatever you need
+    "esModuleInterop": true,
+    "moduleResolution": "node",
     "noEmit": true,
     "outDir": "dist",
+    "rootDir": "src",
     "strict": true,
+    "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
-    "allowImportingTsExtensions": true,
-    "sourceMap": true,
-    "noImplicitAny": true
+    "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*", "src/swagger"]
+  "include": ["src/**/*.ts", "src/types/**/*.d.ts", "src/swagger"]
 }

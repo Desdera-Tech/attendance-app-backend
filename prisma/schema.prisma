@@ -13,9 +13,24 @@ datasource db {
   provider = "postgresql"
 }
 
+model Admin {
+  id           String  @id @default(uuid())
+  name         String
+  email        String  @unique
+  profilePhoto String?
+  role         Role    @default(ADMIN)
+  passwordHash String
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+  @@map("admins")
+}
+
 model User {
   id           String  @id @default(uuid())
-  clerkId      String  @unique
   email        String  @unique
   firstName    String
   lastName     String
@@ -39,6 +54,7 @@ enum Role {
   ADMIN
   LECTURER
   COURSE_REP
+  ASST_COURSE_REP
   STUDENT
 }
 
@@ -46,6 +62,7 @@ model Student {
   id           String     @id
   user         User       @relation(fields: [id], references: [id], onDelete: Cascade)
   matricNumber String     @unique
+  middleName   String
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   level        String

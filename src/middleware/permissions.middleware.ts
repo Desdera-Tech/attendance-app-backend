@@ -2,8 +2,8 @@ import { Request, Response } from "express";
 import { Role } from "../generated/prisma/enums.ts";
 import { prisma } from "../lib/prisma.ts";
 import { User } from "../entities/User.ts";
-import { getAuth } from "@clerk/express";
-import authMiddleware from "./auth.middleware.ts";
+import { requireAuth } from "./auth.middleware.ts";
+import { ApiResponse } from "../dto/ApiRespnse.ts";
 
 const withPermissions =
   (
@@ -12,25 +12,36 @@ const withPermissions =
     handler: (req: Request, res: Response, user: User) => any
   ) =>
   async (req: Request, res: Response) => {
-    authMiddleware(req, res, async () => {
+    requireAuth(req, res, async () => {
       try {
-        const { userId } = getAuth(req);
-
         const user = await prisma.user.findUnique({
-          where: { clerkId: userId! },
+          where: { id: req.auth?.userId },
         });
         const roles = Array.isArray(requiredRole)
           ? requiredRole
           : [requiredRole];
 
         if (!user || !roles.includes(user.role)) {
-          return res.status(403).json({ error });
+          const response: ApiResponse<string> = {
+            data: null,
+            success: false,
+            statusCode: 403,
+            message: error,
+          };
+
+          return res.status(response.statusCode).json(response);
         }
 
         return handler(req, res, user);
       } catch (err) {
         console.error(err);
-        return res.status(500).json({ error: "Server error" });
+        const response: ApiResponse<string> = {
+          data: null,
+          success: false,
+          statusCode: 500,
+          message: "Server error",
+        };
+        return res.status(response.statusCode).json(response);
       }
     });
   };
