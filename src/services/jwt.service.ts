@@ -44,21 +44,38 @@ export class JwtService {
     token: string,
     expiresInSeconds: number
   ) {
+    // Add token to a Redis set for the user
+    await redis.sadd(`refresh_tokens:${identifier}`, token);
+
+    // Set expiry for the token individually (optional, helps auto-cleanup)
+    await redis.set(`refresh_token:${token}`, "1", "EX", expiresInSeconds);
+  }
+
+  async getAllRefreshTokens(identifier: string): Promise<string[]> {
+    const tokens = await redis.smembers(`refresh_tokens:${identifier}`);
+    return tokens;
+  }
+
+  async blacklistRefreshToken(
+    identifier: string,
+    token: string,
+    expiresInSeconds: number
+  ) {
+    // Remove from the user’s active set
+    await redis.srem(`refresh_tokens:${identifier}`, token);
+
+    // Mark it explicitly as blacklisted
     await redis.set(
-      `active_refresh:${identifier}:${token}`,
+      `blacklisted_refresh:${token}`,
       "1",
       "EX",
       expiresInSeconds
     );
   }
 
-  async blacklistRefreshToken(token: string, expiresInSeconds: number) {
-    await redis.set(`bl_refresh:${token}`, "1", "EX", expiresInSeconds);
-  }
-
   async isRefreshTokenBlacklisted(token: string) {
-    const exists = await redis.get(`bl_refresh:${token}`);
-    return exists !== null;
+    const exists = await redis.exists(`blacklisted_refresh:${token}`);
+    return exists === 1;
   }
 }
 

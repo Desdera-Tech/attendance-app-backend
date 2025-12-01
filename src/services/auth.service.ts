@@ -395,7 +395,11 @@ export class AuthService {
       payload = jwtService.verifyRefreshToken(oldRefreshToken);
 
       // BLACKLIST OLD TOKEN
-      await jwtService.blacklistRefreshToken(oldRefreshToken, 60 * 60 * 24 * 7); // 7 days
+      await jwtService.blacklistRefreshToken(
+        payload.userId,
+        oldRefreshToken,
+        60 * 60 * 24 * 7
+      ); // 7 days
     } catch (error) {
       console.error(error);
 
