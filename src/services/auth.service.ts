@@ -9,25 +9,27 @@ import { LoginResponse } from "../dto/auth/response/LoginResponse.ts";
 import { Admin } from "../entities/Admin.ts";
 import { Lecturer } from "../entities/Lecturer.ts";
 import { Student } from "../entities/Student.ts";
-import { User } from "../entities/User.ts";
 import { Role } from "../generated/prisma/enums.ts";
 import { prisma } from "../lib/prisma.ts";
-import { passwordCompare, passwordHash } from "../utils/password.ts";
+import { passwordCompare, passwordHash } from "../core/utils/password.ts";
 import { jwtService, TokenPayload } from "./jwt.service.ts";
 import jwt from "jsonwebtoken";
+import { HttpError } from "../core/errors/HttpError.ts";
+import { BadRequestError } from "../core/errors/BadRequestError.ts";
+import { UnauthorizedError } from "../core/errors/UnauthorizedError.ts";
+import { schoolService } from "./school.service.ts";
+import { adminService } from "./admin.service.ts";
+import { userService } from "./user.service.ts";
+import { studentService } from "./student.service.ts";
+import { CreateSchoolAdminRequest } from "../dto/auth/request/CreateSchoolAdminRequest.ts";
+import { User } from "../generated/prisma/client.ts";
 
 export class AuthService {
   async createAdmin(data: CreateAdminRequest): Promise<ApiResponse<Admin>> {
     const { name, email, password } = data;
 
-    if (await prisma.admin.findUnique({ where: { email } })) {
-      const response: ApiResponse<Admin> = {
-        data: null,
-        success: false,
-        statusCode: 409,
-        message: "Admin with this email already exists",
-      };
-      return response;
+    if (await adminService.existsByEmail(email)) {
+      throw new HttpError(409, "An admin with this email already exists");
     }
 
     const hashedPassword = await passwordHash(password);
@@ -41,28 +43,27 @@ export class AuthService {
       },
     });
 
-    const response: ApiResponse<Admin> = {
+    return {
       data: admin,
-      success: true,
-      statusCode: 201,
       message: "Admin created successfully",
     };
-    return response;
   }
 
   async createLecturer(
-    data: CreateLecturerRequest
+    data: CreateLecturerRequest,
+    schoolId: string
   ): Promise<ApiResponse<Lecturer>> {
     const { firstName, lastName, email, phone, password } = data;
 
-    if (await prisma.user.findUnique({ where: { email } })) {
-      const response: ApiResponse<Lecturer> = {
-        data: null,
-        success: false,
-        statusCode: 409,
-        message: "An account with this email already exists",
-      };
-      return response;
+    if (!schoolService.existsById(schoolId)) {
+      throw new HttpError(404, "School not found!");
+    }
+
+    if (await userService.existsByEmail(email, schoolId)) {
+      throw new HttpError(
+        409,
+        "An account with this email already exists in this school"
+      );
     }
 
     const hashedPassword = await passwordHash(password);
@@ -75,6 +76,7 @@ export class AuthService {
           lastName,
           role: "LECTURER",
           passwordHash: hashedPassword,
+          schoolId,
         },
       });
 
@@ -82,24 +84,23 @@ export class AuthService {
         data: {
           id: user.id,
           phone,
+          schoolId,
         },
       });
 
       return [user, lecturer];
     });
 
-    const response: ApiResponse<Lecturer> = {
-      data: { ...lecturer, ...user } as Lecturer,
-      success: false,
-      statusCode: 201,
+    return {
+      data: { ...lecturer, ...user },
       message: "Lecturer created successfully",
     };
-    return response;
   }
 
   async createStudent(
     data: CreateStudentRequest,
-    loggedInUser: User
+    schoolId: string,
+    loggedInUserRole: Role
   ): Promise<ApiResponse<Student>> {
     const {
       matricNumber,
@@ -113,33 +114,30 @@ export class AuthService {
       role,
       password,
     } = data;
-
     const userRole = role as Role;
 
     const allowedCurrentRolesForCustomRole: Role[] = [
       "SUPER_ADMIN",
       "ADMIN",
-      "COURSE_REP",
+      "SCHOOL_ADMIN",
     ];
 
-    if (await prisma.user.findUnique({ where: { email } })) {
-      const response: ApiResponse<Student> = {
-        data: null,
-        success: false,
-        statusCode: 409,
-        message: "An account with this email already exists",
-      };
-      return response;
+    if (!schoolService.existsById(schoolId)) {
+      throw new HttpError(404, "School not found!");
     }
 
-    if (await prisma.student.findUnique({ where: { matricNumber } })) {
-      const response: ApiResponse<Student> = {
-        data: null,
-        success: false,
-        statusCode: 409,
-        message: "An student with this matric number already exists",
-      };
-      return response;
+    if (await userService.existsByEmail(email, schoolId)) {
+      throw new HttpError(
+        409,
+        "An account with this email already exists in this school"
+      );
+    }
+
+    if (await studentService.existsByMatricNumber(matricNumber, schoolId)) {
+      throw new HttpError(
+        409,
+        "A student with this matric number already exists in this school"
+      );
     }
 
     const hashedPassword = await passwordHash(password);
@@ -149,12 +147,11 @@ export class AuthService {
           email,
           firstName,
           lastName,
-          role:
-            allowedCurrentRolesForCustomRole.includes(loggedInUser.role) &&
-            loggedInUser.role !== "COURSE_REP"
-              ? userRole
-              : "STUDENT",
+          role: allowedCurrentRolesForCustomRole.includes(loggedInUserRole)
+            ? userRole
+            : "STUDENT",
           passwordHash: hashedPassword,
+          schoolId,
         },
       });
 
@@ -166,19 +163,73 @@ export class AuthService {
           departmentId,
           level,
           phone,
+          schoolId,
+        },
+        include: {
+          department: {
+            select: {
+              id: true,
+              collegeId: true,
+              name: true,
+              college: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
         },
       });
 
       return [user, student];
     });
 
-    const response: ApiResponse<Student> = {
-      data: { ...student, ...user } as Student,
-      success: false,
-      statusCode: 201,
+    return {
+      data: {
+        ...student,
+        ...user,
+        collegeId: student.department.collegeId,
+        departmentId: student.departmentId,
+        collegeName: student.department.name,
+        departmentName: student.department.college.name,
+      },
       message: "Student created successfully",
     };
-    return response;
+  }
+
+  async createSchoolAdmin(
+    data: CreateSchoolAdminRequest,
+    schoolId: string
+  ): Promise<ApiResponse<User>> {
+    const { firstName, lastName, email, password } = data;
+
+    if (!schoolService.existsById(schoolId)) {
+      throw new HttpError(404, "School not found!");
+    }
+
+    if (await userService.existsByEmail(email, schoolId)) {
+      throw new HttpError(
+        409,
+        "An account with this email already exists in this school"
+      );
+    }
+
+    const hashedPassword = await passwordHash(password);
+    const user = await prisma.user.create({
+      data: {
+        email,
+        firstName,
+        lastName,
+        role: "SCHOOL_ADMIN",
+        passwordHash: hashedPassword,
+        schoolId,
+      },
+    });
+
+    return {
+      data: user,
+      message: "School admin created successfully",
+    };
   }
 
   async loginAdmin(
@@ -191,34 +242,16 @@ export class AuthService {
     });
 
     if (!admin) {
-      const response: ApiResponse<LoginResponse<Admin>> = {
-        data: null,
-        success: false,
-        statusCode: 401,
-        message: "Invalid email or password",
-      };
-      return response;
+      throw new BadRequestError("Invalid email or password");
     }
 
     const isPasswordValid = await passwordCompare(password, admin.passwordHash);
     if (!isPasswordValid) {
-      const response: ApiResponse<LoginResponse<Admin>> = {
-        data: null,
-        success: false,
-        statusCode: 401,
-        message: "Invalid email or password",
-      };
-      return response;
+      throw new BadRequestError("Invalid email or password");
     }
 
     if (!admin.isActive) {
-      const response: ApiResponse<LoginResponse<Admin>> = {
-        data: null,
-        success: false,
-        statusCode: 403,
-        message: "Admin account is deactivated",
-      };
-      return response;
+      throw new HttpError(403, "Admin account is deactivated");
     }
 
     const { accessToken, refreshToken } = this.generateTokens(
@@ -226,102 +259,86 @@ export class AuthService {
       admin.role
     );
 
-    const responseData: LoginResponse<Admin> = {
-      data: admin,
-      accessToken,
-      refreshToken,
-    };
-
-    const response: ApiResponse<LoginResponse<Admin>> = {
-      data: responseData,
-      success: true,
-      statusCode: 200,
+    return {
+      data: {
+        data: admin,
+        accessToken,
+        refreshToken,
+      },
       message: "Login successful!",
     };
-    return response;
   }
 
   async loginLecturer(
-    data: LoginLecturerRequest
+    data: LoginLecturerRequest,
+    schoolId: string
   ): Promise<ApiResponse<LoginResponse<Lecturer>>> {
     const { email, password } = data;
 
+    if (!schoolService.existsById(schoolId)) {
+      throw new HttpError(404, "School not found!");
+    }
+
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email_schoolId: { email, schoolId } },
       include: { lecturers: { select: { phone: true } } },
     });
 
     if (!user) {
-      const response: ApiResponse<LoginResponse<Lecturer>> = {
-        data: null,
-        success: false,
-        statusCode: 401,
-        message: "Invalid email or password",
-      };
-      return response;
+      throw new BadRequestError("Invalid email or password");
     }
 
     const isPasswordValid = await passwordCompare(password, user.passwordHash);
     if (!isPasswordValid) {
-      const response: ApiResponse<LoginResponse<Lecturer>> = {
-        data: null,
-        success: false,
-        statusCode: 401,
-        message: "Invalid email or password",
-      };
-      return response;
+      throw new BadRequestError("Invalid email or password");
     }
 
     if (!user.isActive) {
-      const response: ApiResponse<LoginResponse<Lecturer>> = {
-        data: null,
-        success: false,
-        statusCode: 403,
-        message: "Lecturer account is deactivated",
-      };
-      return response;
+      throw new HttpError(403, "Lecturer account is deactivated");
     }
-
-    const lecturer = { ...user.lecturers[0], ...user } as Lecturer;
 
     const { accessToken, refreshToken } = this.generateTokens(
       user.id,
       user.role
     );
 
-    const responseData: LoginResponse<Lecturer> = {
-      data: lecturer,
-      accessToken,
-      refreshToken,
-    };
-
-    const response: ApiResponse<LoginResponse<Lecturer>> = {
-      data: responseData,
-      success: true,
-      statusCode: 200,
+    return {
+      data: {
+        data: { ...user.lecturers[0], ...user },
+        accessToken,
+        refreshToken,
+      },
       message: "Login successful!",
     };
-    return response;
   }
 
   async loginStudent(
-    data: LoginStudentRequest
+    data: LoginStudentRequest,
+    schoolId: string
   ): Promise<ApiResponse<LoginResponse<Student>>> {
     const { matricNumber, password } = data;
 
     const student = await prisma.student.findUnique({
-      where: { matricNumber },
-      include: { user: true },
+      where: { matricNumber_schoolId: { matricNumber, schoolId } },
+      include: {
+        user: true,
+        department: {
+          select: {
+            id: true,
+            collegeId: true,
+            name: true,
+            college: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!student) {
-      const response: ApiResponse<LoginResponse<Student>> = {
-        data: null,
-        success: false,
-        statusCode: 401,
-        message: "Invalid Matric number or password",
-      };
-      return response;
+      throw new BadRequestError("Invalid Matric number or password");
     }
 
     const isPasswordValid = await passwordCompare(
@@ -329,42 +346,33 @@ export class AuthService {
       student.user.passwordHash
     );
     if (!isPasswordValid) {
-      const response: ApiResponse<LoginResponse<Student>> = {
-        data: null,
-        success: false,
-        statusCode: 401,
-        message: "Invalid Matric number or password",
-      };
-      return response;
+      throw new BadRequestError("Invalid Matric number or password");
     }
 
     if (!student.user.isActive) {
-      const response: ApiResponse<LoginResponse<Student>> = {
-        data: null,
-        success: false,
-        statusCode: 403,
-        message: "Student account is deactivated",
-      };
-      return response;
+      throw new HttpError(403, "Student account is deactivated");
     }
 
-    const studentData = { ...student, ...student.user } as Student;
+    const studentData: Student = {
+      ...student,
+      ...student.user,
+      collegeId: student.department.collegeId,
+      departmentId: student.departmentId,
+      collegeName: student.department.name,
+      departmentName: student.department.college.name,
+    };
 
     const { accessToken, refreshToken } = this.generateTokens(
       studentData.id,
       studentData.role
     );
 
-    const responseData: LoginResponse<Student> = {
-      data: studentData,
-      accessToken,
-      refreshToken,
-    };
-
     const response: ApiResponse<LoginResponse<Student>> = {
-      data: responseData,
-      success: true,
-      statusCode: 200,
+      data: {
+        data: studentData,
+        accessToken,
+        refreshToken,
+      },
       message: "Login successful!",
     };
     return response;
@@ -372,27 +380,28 @@ export class AuthService {
 
   async refresh(
     oldRefreshToken: string
-  ): Promise<ApiResponse<LoginResponse<null>>> {
+  ): Promise<ApiResponse<LoginResponse<any>>> {
     // Check blacklist
     const blacklisted = await jwtService.isRefreshTokenBlacklisted(
       oldRefreshToken
     );
 
     if (blacklisted) {
-      const response: ApiResponse<LoginResponse<null>> = {
-        name: "REFRESH_TOKEN_BLACKLISTED",
-        success: false,
-        statusCode: 403,
-        message: "Refresh token is blacklisted",
-      };
-      return response;
+      throw new HttpError(
+        403,
+        "Refresh token is blacklisted",
+        "REFRESH_TOKEN_BLACKLISTED"
+      );
     }
 
     let payload: TokenPayload | null = null;
 
     try {
       // Verify token
-      payload = jwtService.verifyRefreshToken(oldRefreshToken);
+      payload = jwtService.verifyToken(oldRefreshToken);
+      if (payload.type !== "refresh") {
+        throw new HttpError(403, "Token must be a refresh token");
+      }
 
       // BLACKLIST OLD TOKEN
       await jwtService.blacklistRefreshToken(
@@ -405,48 +414,28 @@ export class AuthService {
 
       if (error instanceof jwt.JsonWebTokenError) {
         if (error.name === "TokenExpiredError") {
-          const response: ApiResponse<LoginResponse<null>> = {
-            name: "EXPIRED_TOKEN",
-            success: false,
-            statusCode: 401,
-            message: "Token expired",
-          };
-          return response;
+          throw new UnauthorizedError("Token expired", "EXPIRED_TOKEN");
         } else {
-          const response: ApiResponse<LoginResponse<null>> = {
-            name: "INVALID_TOKEN",
-            success: false,
-            statusCode: 401,
-            message: "Invalid token",
-          };
-          return response;
+          throw new UnauthorizedError("Invalid token", "INVALID_TOKEN");
         }
       }
     }
 
     if (!payload) {
-      const response: ApiResponse<LoginResponse<null>> = {
-        success: false,
-        statusCode: 500,
-        message: "An error occurred while refreshing token",
-      };
-      return response;
+      throw new HttpError(500, "An error occurred while refreshing token");
     }
 
     // Generate new tokens
     const accessToken = jwtService.generateAccessToken(payload);
     const refreshToken = jwtService.generateRefreshToken(payload);
 
-    const response: ApiResponse<LoginResponse<null>> = {
+    return {
       data: {
         accessToken,
         refreshToken,
-      } as LoginResponse<null>,
-      success: false,
-      statusCode: 200,
+      },
       message: "Tokens refreshed successfully",
     };
-    return response;
   }
 
   generateTokens(userId: string, role: Role) {

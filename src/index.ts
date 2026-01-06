@@ -6,7 +6,8 @@ import cors from "cors";
 import { ENV } from "./config/env.ts";
 import routes from "./routes/index.ts";
 import { swaggerDocs } from "./swagger/swagger.ts";
-import authMiddleware from "./middleware/auth.middleware.ts";
+import { errorMiddleware } from "./core/middleware/error.middleware.ts";
+import { optionalAuth } from "./core/middleware/optionalAuth.ts";
 
 const app = express();
 
@@ -14,10 +15,13 @@ app.use(compression());
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.use(authMiddleware);
+app.use(optionalAuth);
 
 app.use("/api", routes);
+
+app.use(errorMiddleware);
 
 swaggerDocs(app);
 

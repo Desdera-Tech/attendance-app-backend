@@ -1,4 +1,4 @@
-import { requiredString } from "../../../utils/validation.ts";
+import { requiredString } from "../../../core/utils/validation.ts";
 import { z } from "zod";
 
 export const createAdminRequest = z.object({

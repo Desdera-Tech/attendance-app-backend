@@ -1,50 +1,59 @@
-import { authController } from "../controllers/auth.controller.ts";
 import { Router } from "express";
 import { Role } from "../generated/prisma/enums.ts";
-import withPermissions from "../middleware/permissions.middleware.ts";
+import { requireAuth } from "../core/middleware/requireAuth.ts";
+import { requireRole } from "../core/middleware/requireRole.ts";
+import {
+  createAdmin,
+  loginAdmin,
+  createLecturer,
+  loginLecturer,
+  createStudent,
+  loginStudent,
+  createSchoolAdmin,
+} from "../controllers/auth.controller.ts";
 
 const router = Router();
 
-// POST /auth/create-super-admin
-router.post("/create-super-admin", authController.createAdmin);
+router.post("/create-super-admin", createAdmin);
 
-// POST /auth/create-admin
 router.post(
   "/create-admin",
-  withPermissions(
-    Role.SUPER_ADMIN,
-    "Forbidden: You're not allowed to do this",
-    async (req, res) => authController.createAdmin(req, res)
-  )
+  requireAuth,
+  requireRole(Role.SUPER_ADMIN),
+  createAdmin
 );
 
-// POST /auth/login-admin
-router.post("/login-admin", authController.loginAdmin);
+router.post("/login-admin", loginAdmin);
 
-// POST /auth/create-lecturer
 router.post(
-  "/create-lecturer",
-  withPermissions(
-    Role.SUPER_ADMIN,
-    "Forbidden: You're not allowed to do this",
-    async (req, res) => authController.createLecturer(req, res)
-  )
+  "/:schoolId/create-lecturer",
+  requireAuth,
+  requireRole([Role.SUPER_ADMIN, Role.ADMIN, Role.SCHOOL_ADMIN]),
+  createLecturer
 );
 
-// POST /auth/login-lecturer
-router.post("/login-lecturer", authController.loginLecturer);
+router.post("/:schoolId/login-lecturer", loginLecturer);
 
-// POST /auth/create-student
 router.post(
-  "/create-student",
-  withPermissions(
-    [Role.SUPER_ADMIN, Role.ADMIN, Role.COURSE_REP, Role.ASST_COURSE_REP],
-    "Forbidden: You're not allowed to do this",
-    authController.createStudent
-  )
+  "/:schoolId/create-student",
+  requireAuth,
+  requireRole([
+    Role.SUPER_ADMIN,
+    Role.ADMIN,
+    Role.SCHOOL_ADMIN,
+    Role.COURSE_REP,
+    Role.ASST_COURSE_REP,
+  ]),
+  createStudent
 );
 
-// POST /auth/login-student
-router.post("/login-student", authController.loginStudent);
+router.post("/:schoolId/login-student", loginStudent);
+
+router.post(
+  "/:schoolId/create-admin",
+  requireAuth,
+  requireRole([Role.SUPER_ADMIN, Role.ADMIN]),
+  createSchoolAdmin
+);
 
 export default router;

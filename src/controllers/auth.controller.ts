@@ -3,132 +3,82 @@ import { createAdminRequest } from "../dto/auth/request/CreateAdminRequest.ts";
 import { authService } from "../services/auth.service.ts";
 import { createLecturerRequest } from "../dto/auth/request/CreateLecturerRequest.ts";
 import { createStudentRequest } from "../dto/auth/request/CreateStudentRequest.ts";
-import { User } from "../entities/User.ts";
 import { loginAdminRequest } from "../dto/auth/request/LoginAdminRequest.ts";
 import { loginLecturerRequest } from "../dto/auth/request/LoginLecturerRequest.ts";
 import { loginStudentRequest } from "../dto/auth/request/LoginStudentRequest.ts";
-import { ApiResponse } from "../dto/ApiRespnse.ts";
-import { jwtService } from "../services/jwt.service.ts";
+import { asyncHandler } from "../core/utils/asyncHandler.ts";
+import { BadRequestError } from "../core/errors/BadRequestError.ts";
 
-export class AuthController {
-  async createAdmin(req: Request, res: Response) {
-    try {
-      // Validate incoming body
-      const data = createAdminRequest.parse(req.body);
+export const createAdmin = asyncHandler(async (req: Request, res: Response) => {
+  const data = createAdminRequest.parse(req.body);
+  const response = await authService.createAdmin(data);
+  res.status(201).json(response);
+});
 
-      const response = await authService.createAdmin(data);
+export const loginAdmin = asyncHandler(async (req: Request, res: Response) => {
+  const data = loginAdminRequest.parse(req.body);
+  const response = await authService.loginAdmin(data);
+  res.status(200).json(response);
+});
 
-      res.status(response.statusCode).json(response);
-    } catch (err: any) {
-      console.error(err);
+export const createLecturer = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { schoolId } = req.params;
 
-      return res.status(400).json({
-        error: err.message || "Failed to create admin",
-      });
-    }
+    const data = createLecturerRequest.parse(req.body);
+    const response = await authService.createLecturer(data, schoolId);
+    res.status(201).json(response);
+  }
+);
+
+export const loginLecturer = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { schoolId } = req.params;
+
+    const data = loginLecturerRequest.parse(req.body);
+    const response = await authService.loginLecturer(data, schoolId);
+    res.status(201).json(response);
+  }
+);
+
+export const createStudent = asyncHandler(
+  async (req: Request, res: Response) => {
+    const role = req.auth!.role;
+    const { schoolId } = req.params;
+
+    const data = createStudentRequest.parse(req.body);
+    const response = await authService.createStudent(data, schoolId, role);
+    res.status(201).json(response);
+  }
+);
+
+export const loginStudent = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { schoolId } = req.params;
+
+    const data = loginStudentRequest.parse(req.body);
+    const response = await authService.loginStudent(data, schoolId);
+    res.status(201).json(response);
+  }
+);
+
+export const createSchoolAdmin = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { schoolId } = req.params;
+
+    const data = createStudentRequest.parse(req.body);
+    const response = await authService.createSchoolAdmin(data, schoolId);
+    res.status(201).json(response);
+  }
+);
+
+export const refresh = asyncHandler(async (req: Request, res: Response) => {
+  const refreshToken = req.headers["x-refresh-token"] as string | undefined;
+
+  if (!refreshToken) {
+    throw new BadRequestError("Missing refresh token");
   }
 
-  async loginAdmin(req: Request, res: Response) {
-    try {
-      // Validate incoming body
-      const data = loginAdminRequest.parse(req.body);
-
-      const response = await authService.loginAdmin(data);
-
-      res.status(response.statusCode).json(response);
-    } catch (err: any) {
-      console.error(err);
-
-      return res.status(400).json({
-        error: err.message || "Failed to login as admin",
-      });
-    }
-  }
-
-  async createLecturer(req: Request, res: Response) {
-    try {
-      // Validate incoming body
-      const data = createLecturerRequest.parse(req.body);
-
-      const response = await authService.createLecturer(data);
-
-      res.status(response.statusCode).json(response);
-    } catch (err: any) {
-      console.error(err);
-
-      return res.status(400).json({
-        error: err.message || "Failed to create lecturer",
-      });
-    }
-  }
-
-  async loginLecturer(req: Request, res: Response) {
-    try {
-      // Validate incoming body
-      const data = loginLecturerRequest.parse(req.body);
-
-      const response = await authService.loginLecturer(data);
-
-      res.status(response.statusCode).json(response);
-    } catch (err: any) {
-      console.error(err);
-
-      return res.status(400).json({
-        error: err.message || "Failed to login as lecturer",
-      });
-    }
-  }
-
-  async createStudent(req: Request, res: Response, loggedInUser: User) {
-    try {
-      // Validate incoming body
-      const data = createStudentRequest.parse(req.body);
-
-      const response = await authService.createStudent(data, loggedInUser);
-
-      res.status(response.statusCode).json(response);
-    } catch (err: any) {
-      console.error(err);
-
-      return res.status(400).json({
-        error: err.message || "Failed to create student",
-      });
-    }
-  }
-
-  async loginStudent(req: Request, res: Response) {
-    try {
-      // Validate incoming body
-      const data = loginStudentRequest.parse(req.body);
-
-      const response = await authService.loginStudent(data);
-
-      res.status(response.statusCode).json(response);
-    } catch (err: any) {
-      console.error(err);
-
-      return res.status(400).json({
-        error: err.message || "Failed to login as student",
-      });
-    }
-  }
-
-  async refresh(req: Request, res: Response) {
-    const refreshToken = req.headers["x-refresh-token"] as string | undefined;
-
-    if (!refreshToken) {
-      const response: ApiResponse<null> = {
-        data: null,
-        success: false,
-        statusCode: 401,
-        message: "Missing refresh token",
-      };
-      return res.status(response.statusCode).json(response);
-    }
-
-    const response = await authService.refresh(refreshToken);
-    res.status(response.statusCode).json(response);
-  }
-}
-
-export const authController = new AuthController();
+  const response = await authService.refresh(refreshToken);
+  res.status(200).json(response);
+});

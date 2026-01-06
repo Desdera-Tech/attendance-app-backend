@@ -7,5 +7,6 @@ export interface User {
   email: string;
   role: Role;
   profilePhoto: string | null;
+  isEmailVerified: boolean;
   createdAt: Date;
 }

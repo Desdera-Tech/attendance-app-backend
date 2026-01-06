@@ -13,14 +13,31 @@ datasource db {
   provider = "postgresql"
 }
 
+model School {
+  id                      String  @id @default(uuid())
+  name                    String  @unique
+  image                   String?
+  canStudentCreateSession Boolean @default(true)
+
+  users       User[]
+  students    Student[]
+  lecturers   Lecturer[]
+  courses     Course[]
+  departments Department[]
+  colleges    College[]
+
+  @@map("schools")
+}
+
 model Admin {
-  id           String  @id @default(uuid())
-  name         String
-  email        String  @unique
-  profilePhoto String?
-  role         Role    @default(ADMIN)
-  passwordHash String
-  isActive     Boolean @default(true)
+  id              String  @id @default(uuid())
+  name            String
+  email           String  @unique
+  profilePhoto    String?
+  role            Role    @default(ADMIN)
+  passwordHash    String
+  isActive        Boolean @default(true)
+  isEmailVerified Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -30,21 +47,26 @@ model Admin {
 }
 
 model User {
-  id           String  @id @default(uuid())
-  email        String  @unique
-  firstName    String
-  lastName     String
-  profilePhoto String?
-  role         Role
-  passwordHash String
-  isActive     Boolean @default(true)
+  id              String  @id @default(uuid())
+  email           String
+  firstName       String
+  lastName        String
+  profilePhoto    String?
+  role            Role
+  passwordHash    String
+  isActive        Boolean @default(true)
+  isEmailVerified Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
   students  Student[]
   lecturers Lecturer[]
 
+  @@unique([email, schoolId])
   @@index([role])
   @@map("users")
 }
@@ -52,6 +74,7 @@ model User {
 enum Role {
   SUPER_ADMIN
   ADMIN
+  SCHOOL_ADMIN
   LECTURER
   COURSE_REP
   ASST_COURSE_REP
@@ -61,7 +84,7 @@ enum Role {
 model Student {
   id           String     @id
   user         User       @relation(fields: [id], references: [id], onDelete: Cascade)
-  matricNumber String     @unique
+  matricNumber String
   middleName   String
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
@@ -71,10 +94,14 @@ model Student {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
   attendanceRecords AttendanceRecord[]
 
+  @@unique([matricNumber, schoolId])
   @@index([departmentId])
-  @@index([matricNumber])
+  @@index([matricNumber, schoolId])
   @@map("students")
 }
 
@@ -86,65 +113,78 @@ model Lecturer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
   attendanceSessions AttendanceSession[]
 
   @@map("lecturers")
 }
 
 model Course {
-  id           String     @id @default(uuid())
-  code         String
-  title        String
-  departmentId String
-  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  id    String @id @default(uuid())
+  code  String
+  title String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
   attendanceSessions AttendanceSession[]
 
-  @@unique([code, departmentId])
-  @@index([departmentId])
+  @@unique([code, schoolId])
   @@map("courses")
 }
 
 model Department {
   id        String  @id @default(uuid())
   collegeId String
-  name      String  @unique
+  name      String
   college   College @relation(fields: [collegeId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  courses  Course[]
-  students Student[]
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
+  students           Student[]
+  attendanceSessions AttendanceSession[]
+
+  @@unique([name, collegeId, schoolId])
   @@index([collegeId])
   @@map("departments")
 }
 
 model College {
   id   String @id @default(uuid())
-  name String @unique
+  name String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
   departments Department[]
 
+  @@unique([name, schoolId])
   @@map("colleges")
 }
 
 model AttendanceSession {
-  id         String    @id @default(uuid())
-  courseId   String
-  course     Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lecturerId String?
-  lecturer   Lecturer? @relation(fields: [lecturerId], references: [id], onDelete: SetNull)
-  level      String
-  startsAt   DateTime
-  endsAt     DateTime
+  id           String     @id @default(uuid())
+  courseId     String
+  course       Course     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  lecturerId   String?
+  lecturer     Lecturer?  @relation(fields: [lecturerId], references: [id], onDelete: SetNull)
+  level        String
+  startsAt     DateTime
+  endsAt       DateTime
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

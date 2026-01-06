@@ -1,7 +1,7 @@
 import { requiredString } from "../../../core/utils/validation.ts";
 import { z } from "zod";
 
-export const createLecturerRequest = z.object({
+export const createSchoolAdminRequest = z.object({
   firstName: requiredString.min(
     3,
     "First name must be at least 3 characters long"
@@ -11,11 +11,10 @@ export const createLecturerRequest = z.object({
     "Last name must be at least 3 characters long"
   ),
   email: z.email("Invalid email address"),
-  phone: requiredString.min(10).max(15),
   password: requiredString.min(
     8,
     "Password must be at least 8 characters long"
   ),
 });
 
-export type CreateLecturerRequest = z.infer<typeof createLecturerRequest>;
+export type CreateSchoolAdminRequest = z.infer<typeof createSchoolAdminRequest>;
